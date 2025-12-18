@@ -1,44 +1,21 @@
 import streamlit as st
 import os
+import time
 from dotenv import load_dotenv
+from crewai import Agent, Task, Crew, LLM
 import warnings
-warnings.filterwarnings('ignore')
 
+warnings.filterwarnings('ignore')
 load_dotenv()
 
-# Imports
-try:
-    from crewai import Agent, Task, Crew
-    CREWAI_AVAILABLE = True
-except ImportError as e:
-    st.error(f"❌ CrewAI: {e}")
-    CREWAI_AVAILABLE = False
-
-try:
-    from crewai_tools import ScrapeWebsiteTool, SerperDevTool
-    TOOLS_AVAILABLE = True
-except ImportError:
-    TOOLS_AVAILABLE = False
-
-try:
-    import docx
-    DOCX_AVAILABLE = True
-except ImportError:
-    DOCX_AVAILABLE = False
-
-try:
-    import PyPDF2
-    PDF_AVAILABLE = True
-except ImportError:
-    PDF_AVAILABLE = False
-
+# Page config
 st.set_page_config(page_title="AI Resume Tailoring | Akash Bauri", page_icon="📄", layout="wide")
 
+# CSS
 st.markdown("""
 <style>
     .main-header {font-size: 2.5rem; font-weight: 700; background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
         -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; margin-bottom: 0.5rem;}
-    .sub-header {text-align: center; color: #666; margin-bottom: 1.5rem;}
     .developer-credit {position: fixed; bottom: 15px; right: 15px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white; padding: 12px 20px; border-radius: 40px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); font-weight: 600; font-size: 0.85rem; z-index: 999;}
 </style>
@@ -56,191 +33,78 @@ SERPER_KEY = get_key("SERPER_API_KEY")
 
 if GROQ_KEY:
     os.environ["GROQ_API_KEY"] = GROQ_KEY
-    os.environ["OPENAI_API_KEY"] = GROQ_KEY
-    os.environ["OPENAI_API_BASE"] = "https://api.groq.com/openai/v1"
-
 if SERPER_KEY:
     os.environ["SERPER_API_KEY"] = SERPER_KEY
 
-def check_keys():
-    if not GROQ_KEY:
-        st.error("❌ Groq API key missing!")
-        st.info("Add GROQ_API_KEY in Streamlit Secrets: Settings → Secrets")
-        return False
-    return True
-
+# Tools
 try:
-    scrape_tool = ScrapeWebsiteTool() if TOOLS_AVAILABLE else None
-    search_tool = SerperDevTool() if (TOOLS_AVAILABLE and SERPER_KEY) else None
+    from crewai_tools import ScrapeWebsiteTool, SerperDevTool
+    scrape_tool = ScrapeWebsiteTool()
+    search_tool = SerperDevTool() if SERPER_KEY else None
 except:
     scrape_tool = None
     search_tool = None
 
-def extract_pdf(file):
-    if not PDF_AVAILABLE:
-        return None
-    try:
-        reader = PyPDF2.PdfReader(file)
-        return "\n".join([p.extract_text() for p in reader.pages])
-    except:
-        return None
-
-def extract_docx(file):
-    if not DOCX_AVAILABLE:
-        return None
-    try:
-        doc = docx.Document(file)
-        return "\n".join([p.text for p in doc.paragraphs])
-    except:
-        return None
-
-def make_pdf(md_file):
-    try:
-        from reportlab.lib.pagesizes import letter
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.units import inch
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-        from reportlab.lib.enums import TA_CENTER
-        from io import BytesIO
-        
-        with open(md_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.75*inch, bottomMargin=0.75*inch,
-                                leftMargin=0.75*inch, rightMargin=0.75*inch)
-        
-        styles = getSampleStyleSheet()
-        title = ParagraphStyle('T', parent=styles['Heading1'], fontSize=18, alignment=TA_CENTER, fontName='Helvetica-Bold')
-        head = ParagraphStyle('H', parent=styles['Heading2'], fontSize=14, fontName='Helvetica-Bold')
-        body = ParagraphStyle('B', parent=styles['Normal'], fontSize=11)
-        
-        story = []
-        for line in content.split('\n'):
-            line = line.strip()
-            if not line:
-                story.append(Spacer(1, 0.1*inch))
-            elif line.startswith('# '):
-                story.append(Paragraph(line[2:], title))
-            elif line.startswith('## '):
-                story.append(Spacer(1, 0.15*inch))
-                story.append(Paragraph(line[3:], head))
-            elif line.startswith('- '):
-                story.append(Paragraph('• ' + line[2:], body))
-            else:
-                story.append(Paragraph(line.replace('**', '').replace('*', ''), body))
-        
-        doc.build(story)
-        return buffer.getvalue()
-    except Exception as e:
-        st.error(f"PDF error: {e}")
-        return None
-
+# UI
 st.markdown('<h1 class="main-header">🚀 AI Resume Tailoring Assistant</h1>', unsafe_allow_html=True)
-st.markdown('<p class="sub-header">Powered by CrewAI & Groq | Built by Akash Bauri</p>', unsafe_allow_html=True)
 st.markdown('<div class="developer-credit">👨‍💻 Developed by Akash Bauri | AI Engineer</div>', unsafe_allow_html=True)
-
-st.markdown("**Upload resume → Job URL + GitHub → Get tailored resume + interview questions**")
-
-if not CREWAI_AVAILABLE:
-    st.error("❌ CrewAI not installed")
-    st.stop()
 
 with st.sidebar:
     st.header("📝 Your Info")
     uploaded = st.file_uploader("**1. Resume**", type=['pdf', 'docx'])
-    
-    if uploaded:
-        st.success(f"✅ {uploaded.name}")
-        ext = uploaded.name.split('.')[-1]
-        resume_path = f"resume.{ext}"
-        with open(resume_path, "wb") as f:
-            f.write(uploaded.getbuffer())
-    
-    st.markdown("---")
     job = st.text_input("**2. Job URL**", placeholder="https://...")
-    st.markdown("---")
     github = st.text_input("**3. GitHub**", placeholder="https://github.com/...")
-    st.markdown("---")
     summary = st.text_area("**4. Summary**", height=120, placeholder="I'm an AI Engineer...")
-    st.markdown("---")
-    model = st.selectbox("**5. Model**", ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"], index=0)
-    st.markdown("---")
+    model_choice = st.selectbox("**5. Model**", ["llama-3.1-8b-instant", "llama-3.3-70b-versatile", "mixtral-8x7b-32768"], index=0)
+    st.info("💡 Pro Tip: Use '8b-instant' to avoid Rate Limits.")
     btn = st.button("🎯 **Tailor Resume**", use_container_width=True, type="primary")
 
-def create_agents(model_name):
-    tools = [t for t in [scrape_tool, search_tool] if t]
-    
-    researcher = Agent(role="Job Analyst", goal="Extract job requirements", 
-                      backstory="Expert at analyzing job postings", tools=tools, verbose=False, allow_delegation=False)
-    profiler = Agent(role="Profile Analyst", goal="Analyze candidate profile", 
-                    backstory="Expert at evaluating resumes", tools=tools, verbose=False, allow_delegation=False)
-    writer = Agent(role="Resume Writer", goal="Write ATS-optimized resumes", 
-                   backstory="Expert resume writer", tools=tools, verbose=False, allow_delegation=False)
-    interviewer = Agent(role="Interview Coach", goal="Create interview questions", 
-                       backstory="Expert interview coach", tools=tools, verbose=False, allow_delegation=False)
-    
-    return researcher, profiler, writer, interviewer
-
 def run_crew(job_url, github_url, summ, model_name):
-    os.environ["OPENAI_MODEL_NAME"] = model_name
-    researcher, profiler, writer, interviewer = create_agents(model_name)
-    
-    task1 = Task(description=f"Analyze job at {job_url}. List required skills and keywords.",
-                expected_output="Job requirements and ATS keywords", agent=researcher)
-    task2 = Task(description=f"Analyze GitHub {github_url} and summary: {summ}",
-                expected_output="Candidate skills and experience", agent=profiler)
-    task3 = Task(description="Write ATS resume with keywords, quantified achievements, clean format",
-                expected_output="Complete markdown resume", agent=writer, output_file="tailored_resume.md", context=[task1, task2])
-    task4 = Task(description="Generate 10 interview questions with answers",
-                expected_output="10 questions with guidance", agent=interviewer, output_file="interview_materials.md", context=[task1, task2, task3])
-    
+    # CRITICAL FIX: Use the LLM class explicitly
+    # This prevents the "None or empty response" bug with Groq
+    groq_llm = LLM(
+        model=f"groq/{model_name}",
+        api_key=GROQ_KEY,
+        temperature=0,
+        max_tokens=3000
+    )
+
+    tools = [t for t in [scrape_tool, search_tool] if t]
+
+    # Agents
+    researcher = Agent(role="Job Analyst", goal="Extract job requirements", 
+                      backstory="Expert analyst", tools=tools, llm=groq_llm, verbose=True)
+    profiler = Agent(role="Profile Analyst", goal="Analyze candidate profile", 
+                    backstory="Expert evaluator", tools=tools, llm=groq_llm, verbose=True)
+    writer = Agent(role="Resume Writer", goal="Write ATS-optimized resumes", 
+                   backstory="Expert resume writer", tools=tools, llm=groq_llm, verbose=True)
+    interviewer = Agent(role="Interview Coach", goal="Create interview questions", 
+                       backstory="Expert coach", tools=tools, llm=groq_llm, verbose=True)
+
+    # Tasks - Limited context to save tokens and prevent 429
+    task1 = Task(description=f"Analyze job at {job_url}.", expected_output="Job requirements", agent=researcher)
+    task2 = Task(description=f"Analyze GitHub {github_url} and summary: {summ}", expected_output="Candidate profile", agent=profiler)
+    task3 = Task(description="Write ATS resume", expected_output="Complete markdown resume", agent=writer, context=[task1, task2])
+    task4 = Task(description="Generate 10 interview questions", expected_output="10 questions", agent=interviewer, context=[task3])
+
     crew = Crew(agents=[researcher, profiler, writer, interviewer], tasks=[task1, task2, task3, task4], verbose=True)
     return crew.kickoff()
 
 if btn:
-    if not check_keys():
-        st.stop()
-    if not all([uploaded, job, github, summary]):
-        st.error("❌ Fill all fields")
+    if not GROQ_KEY:
+        st.error("❌ Add GROQ_API_KEY in Secrets!")
         st.stop()
     
     try:
-        with st.spinner("🤖 Working..."):
-            result = run_crew(job, github, summary, model)
-        st.success("✅ Done!")
-        
-        t1, t2, t3 = st.tabs(["📄 Resume", "📥 PDF", "💬 Questions"])
-        
-        with t1:
-            if os.path.exists("tailored_resume.md"):
-                with open("tailored_resume.md", "r") as f:
-                    md = f.read()
-                st.markdown(md)
-                st.download_button("⬇️ Download", md, "resume.md", use_container_width=True)
-        
-        with t2:
-            if os.path.exists("tailored_resume.md"):
-                pdf = make_pdf("tailored_resume.md")
-                if pdf:
-                    st.download_button("📥 PDF", pdf, "Resume.pdf", "application/pdf", use_container_width=True)
-        
-        with t3:
-            if os.path.exists("interview_materials.md"):
-                with open("interview_materials.md", "r") as f:
-                    iq = f.read()
-                st.markdown(iq)
-                st.download_button("⬇️ Download", iq, "questions.md", use_container_width=True)
+        with st.spinner("🤖 AI agents working (may take 2 mins)..."):
+            result = run_crew(job, github, summary, model_choice)
+            st.success("✅ Done!")
+            st.markdown(result.raw)
     except Exception as e:
-        st.error(f"❌ {str(e)}")
-        with st.expander("Details"):
-            st.exception(e)
-
-st.markdown("---")
-c1, c2, c3 = st.columns(3)
-with c1:
-    st.markdown("**Akash Bauri**")
-with c2:
-    st.markdown("**CrewAI + Groq**")
-with c3:
-    st.markdown("**© 2025**")
+        error_msg = str(e)
+        if "429" in error_msg:
+            st.error("❌ Rate Limit Hit! Switch to 'llama-3.1-8b-instant' in the sidebar.")
+        elif "None or empty" in error_msg:
+            st.error("❌ Groq returned an empty response. Wait 1 minute and try again.")
+        else:
+            st.error(f"❌ Error: {error_msg}")
