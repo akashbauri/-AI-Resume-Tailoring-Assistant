@@ -108,7 +108,7 @@ if GROQ_API_KEY:
     os.environ["GROQ_API_KEY"] = GROQ_API_KEY
     os.environ["OPENAI_API_KEY"] = GROQ_API_KEY
     os.environ["OPENAI_API_BASE"] = "https://api.groq.com/openai/v1"
-    os.environ["OPENAI_MODEL_NAME"] = "llama-3.1-70b-versatile"
+    os.environ["OPENAI_MODEL_NAME"] = "llama-3.3-70b-versatile"  # ✅ UPDATED to Llama 3.3
 
 if SERPER_API_KEY:
     os.environ["SERPER_API_KEY"] = SERPER_API_KEY
@@ -399,6 +399,23 @@ with st.sidebar:
         height=200,
         help="Write a brief professional summary highlighting your skills, experience, and career goals"
     )
+    
+    st.markdown("---")
+    
+    # Model selection (Optional)
+    st.subheader("5️⃣ AI Model")
+    model_choice = st.selectbox(
+        "Groq Model",
+        [
+            "llama-3.3-70b-versatile",
+            "llama-3.1-8b-instant",
+            "mixtral-8x7b-32768",
+            "gemma2-9b-it"
+        ],
+        index=0,
+        help="Select the AI model (default: Llama 3.3 70B)"
+    )
+    os.environ["OPENAI_MODEL_NAME"] = model_choice
     
     st.markdown("---")
     
@@ -714,7 +731,7 @@ with st.expander("ℹ️ About This App"):
     
     **Technology Stack:**
     - **CrewAI**: Multi-agent AI framework
-    - **Groq API**: Ultra-fast LLM inference (Llama 3.1 70B)
+    - **Groq API**: Ultra-fast LLM inference (Llama 3.3 70B)
     - **Serper API**: Real-time web search
     - **Streamlit**: Interactive web interface
     
@@ -735,6 +752,8 @@ with st.expander("ℹ️ About This App"):
     ---
     **Developer:** Akash Bauri | AI Engineer  
     **GitHub:** [akashbauri](https://github.com/akashbauri)
+    
+    **Model:** Llama 3.3 70B Versatile (Latest)
     """)
 
 # Footer
