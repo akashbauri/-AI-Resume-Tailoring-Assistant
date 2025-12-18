@@ -3,6 +3,3 @@ crewai
 crewai-tools
 langchain-groq
 python-dotenv
-python-docx
-PyPDF2
-reportlab
